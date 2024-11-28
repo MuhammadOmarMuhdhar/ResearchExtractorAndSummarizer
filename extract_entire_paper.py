@@ -4,15 +4,12 @@ from io import BytesIO
 import arxiv  
 import spacy  
 from PyPDF2 import PdfReader  
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 import os
 import time
 import random
 
 nlp = spacy.load("en_core_web_sm")
-
-
-
 
 def collect_paper_metadata(category, start_year, end_year, max_results):
     """
@@ -233,3 +230,35 @@ def process_pdf(pdf_data):
 
     return result
 
+
+def fetch_and_store_with_adaptive_delay(category, year, sample_size, base_delay=3, max_delay=60):
+    """
+    Fetches metadata and downloads PDFs from arXiv with an adaptive delay mechanism.
+    """
+    current_delay = base_delay
+    retries = 0
+    
+    pdf_contents = []
+    
+    while retries < 5:
+        try:
+            result_data = collect_paper_metadata(category, start_year=year, end_year=year, max_results=sample_size)
+            
+            if result_data:
+                pdf_contents.extend(result_data)
+                
+            # Reset delay and retry counter on success
+            current_delay = base_delay
+            retries = 0
+            break
+            
+        except Exception as e:
+            print(f"Error fetching data for category {category} in year {year}: {e}")
+            
+            # Apply exponential backoff
+            retries += 1
+            current_delay = min(current_delay * 2, max_delay)
+            print(f"Retrying in {current_delay} seconds...")
+            time.sleep(current_delay)
+    
+    return pdf_contents
