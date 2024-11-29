@@ -1,5 +1,5 @@
 import google.generativeai as genai
-import creds
+from config import creds
 import re
 import json 
 import time
@@ -78,10 +78,6 @@ def create_clusters(df_with_embeddings):
     Creates clusters using the HDBSCAN algorithm based on UMAP embeddings.
     
     """
-    # Initialize the HDBSCAN clustering model
-    # - min_cluster_size: Minimum number of points to form a cluster.
-    # - metric: Distance metric used for clustering ('euclidean' in this case).
-    # - cluster_selection_method: 'eom' selects clusters using the excess of mass approach.
 
     if not all(col in df_with_embeddings.columns for col in ['Umap_1', 'Umap_2', 'Umap_3']):
         raise ValueError("The DataFrame must contain the columns 'Umap_1', 'Umap_2', and 'Umap_3' to perform clustering.")
@@ -140,7 +136,7 @@ def clusters_with_summary(df_with_embeddings, data_type='abstract'):
     # Step 3: Generate summaries and titles for each cluster
     summaries = []  # List to store JSON summaries
 
-    for cluster_label in tqdm(df_with_embeddings['Cluster'].unique(), desc="Processing clusters", leave=True):
+    for cluster_label in tqdm(centroids['Cluster'].unique(), desc="Processing clusters", leave=True):
         # Filter data points for the current cluster
         cluster = df_with_embeddings[df_with_embeddings['Cluster'] == cluster_label]
 
@@ -184,13 +180,32 @@ def clusters_with_summary(df_with_embeddings, data_type='abstract'):
 
 def visualize(df_with_embeddings, centroids_df):
 
+    """
+    Generates a 3D scatter plot to visualize research documents and their topic clusters based on UMAP embeddings.
+    The function validates input data, calculates cluster sizes, and creates an interactive Plotly visualization
+    with options to toggle between document points, topic clusters, and combined views.
+
+    Args:
+        df_with_embeddings (pd.DataFrame): A DataFrame containing UMAP embeddings for individual research documents
+                                           with columns ['Umap_1', 'Umap_2', 'Umap_3'], and cluster labels.
+        centroids_df (pd.DataFrame): A DataFrame containing the cluster centroids with additional metadata, 
+                                     including the required columns ['Umap_1', 'Umap_2', 'Umap_3', 'Count', 'Title', 'Summary'].
+
+    Returns:
+        None: Displays an interactive 3D scatter plot in the browser or notebook.
+
+    Raises:
+        ValueError: If `centroids_df` does not contain the required columns ['Summary', 'Title'].
+        ValueError: If `df_with_embeddings` does not contain the required columns ['Umap_1', 'Umap_2', 'Umap_3'].
+    """
+
     if 'Summary' not in centroids_df.columns and 'Title' not in centroids_df.columns:
         raise ValueError("centroids_df needs to be a DataFrame must contain both 'Summary' and 'Title' columns to proceed. Ensure that the clustering process includes generated summaries and titles.")
     
     if not all(col in df_with_embeddings.columns for col in ['Umap_1', 'Umap_2', 'Umap_3']):
         raise ValueError("df_with_embeddings needs to be a DataFrame must contain the columns 'Umap_1', 'Umap_2', and 'Umap_3' to perform clustering.")
 
-    centroids_df['Size'] = (centroids_df['Count'] ** 0.5) / (centroids_df['Count'].max() ** 0.5) * 100
+    centroids_df['Size'] = (centroids_df['Count'] ** 0.5) / (centroids_df['Count'].max() ** 0.5) * 50
 
         # Create the base 3D scatter plot
     fig = go.Figure()
@@ -208,7 +223,7 @@ def visualize(df_with_embeddings, centroids_df):
             opacity=0.8,  # Default opacity for documents
 
         ),
-        name='Document Points (Opacity 0.8)',
+        name='Document Points)',
         visible=False,  # Default visibility
         hovertext=(
             "<b>Title:</b> " + df_with_embeddings['title'] 
@@ -229,14 +244,14 @@ def visualize(df_with_embeddings, centroids_df):
             colorscale='Picnic',  # Sequential scale for density
             symbol='circle',
             colorbar=dict(
-                title="Document Density",
+                title="Density",
                 thickness=10,
                 len=0.5,
                 
             ),
             opacity=.5  # Default opacity for clusters
         ),
-        name='Cluster Centroids (Density-Based Coloring)',
+        name='Topic Clusters (Density-Based Size and Color)',
         hovertext=(
             "<b>Topic:</b> " + centroids_df['Title'] 
             # + "<br><b>Summary:</b> " + 
@@ -258,7 +273,7 @@ def visualize(df_with_embeddings, centroids_df):
             colorscale='Picnic',  # Sequential scale for density
             symbol='circle',
             colorbar=dict(
-                title="Document Density",
+                title="Density",
                 thickness=10,
                 len=0.5,
             
@@ -276,27 +291,27 @@ def visualize(df_with_embeddings, centroids_df):
             dict(
                 buttons=[
                     dict(
-                        label="Show Only Clusters",
+                        label="Topic Clusters",
                         method="update",
                         args=[
                             {"visible": [False, True, False]},  # Hide: Documents, Show: Default Centroids
-                            {"title": "3D Scatterplot of Only Topic Clusters"}
+                            {"title": "Scatterplot of Labeled Topic Clusters"}
                         ]
                     ),
                     dict(
-                        label="Show Documents and Clusters (Opacity 0.3)",
+                        label="Research Titles and Topic Clusters",
                         method="update",
                         args=[
                             {"visible": [True, False, True]},  # Show: Documents, Low Opacity Centroids
-                            {"title": "3D Scatterplot of Documents with Topic Clusters "}
+                            {"title": "Scatterplot of Labeled Research Titles and Topic Clusters"}
                         ]
                     ),
                     dict(
-                        label="Show Only Documents",
+                        label="Research Titles",
                         method="update",
                         args=[
                             {"visible": [True, False, False]},  # Show: Documents, Hide: Centroids
-                            {"title": "3D Scatterplot of Only Documents"}
+                            {"title": "Scatterplot of Labeled Research Titles"}
                         ]
                     ),
                     
@@ -307,22 +322,43 @@ def visualize(df_with_embeddings, centroids_df):
                 x=1,
                 xanchor="left",
                 y=1,
-                yanchor="top"
+                yanchor="bottom"
             )
         ]
     )
 
-    # Customize the layout to remove labels, grid, and background
     fig.update_layout(
         scene=dict(
-            xaxis=dict(title='', showgrid=False, showticklabels=False, backgroundcolor='white', showline=False),
-            yaxis=dict(title='', showgrid=False, showticklabels=False, backgroundcolor='white', showline=False),
-            zaxis=dict(title='', showgrid=False, showticklabels=False, backgroundcolor='white', showline=False)
+            xaxis=dict(
+                title='',
+                showgrid=True,
+                gridcolor='lightgray',
+                gridwidth=2,
+                showticklabels=False,
+                dtick=2,
+                backgroundcolor='white'
+            ),
+            yaxis=dict(
+                title='',
+                showgrid=False,
+                gridcolor='lightgray',
+                gridwidth=2,
+                showticklabels=False,
+                backgroundcolor='white'
+            ),
+            zaxis=dict(
+                title='',
+                showgrid=False,
+                gridcolor='lightgray',
+                gridwidth=2,
+                showticklabels=False,
+                backgroundcolor='white'
+            ),
         ),
-        paper_bgcolor='white',  # Set figure background to white
-        width=1500,  # Set figure width
-        height=1200,  # Set figure height
-        title="3D Scatterplot of UMAP Embeddings"
+        paper_bgcolor='white',
+        width=1150,
+        height=850,
+        title="Scatterplot of Labeled Topic Clusters"
     )
 
     # Show the plot

@@ -1,9 +1,24 @@
 import arxiv
 
-def collect_paper_abstracts(category, start_year, end_year, max_results):
+def fetch_arxiv_abstracts(category, start_year, end_year, max_results):
     """
-    Searches for papers on arXiv within a specified category and date range.
-    Collects metadata, including abstracts, without introducing delays.
+    Fetches metadata and abstracts of research papers from arXiv based on a specified category, date range, and result limit.
+
+    Args:
+        category (str): The arXiv category to search (e.g., "cs.LG" for Machine Learning).
+        start_year (int): The starting year of the date range for the search (e.g., 2020).
+        end_year (int): The ending year of the date range for the search (e.g., 2023).
+        max_results (int): The maximum number of results to retrieve.
+
+    Returns:
+        list[dict]: A list of dictionaries, where each dictionary contains metadata for a paper:
+            - 'id' (str): The unique identifier for the paper on arXiv.
+            - 'title' (str): The title of the paper.
+            - 'published_date' (datetime.date): The publication date of the paper.
+            - 'authors' (str): A comma-separated string of the authors' names.
+            - 'category' (str): The category the paper belongs to.
+            - 'abstract' (str): The abstract of the paper.
+
     """
     import arxiv
 

@@ -2,7 +2,6 @@ from sentence_transformers import SentenceTransformer
 import pandas as pd 
 from sklearn.decomposition import PCA
 from umap import UMAP
-from sklearn.preprocessing import StandardScaler
 
 
 def get_embeddings(text):
