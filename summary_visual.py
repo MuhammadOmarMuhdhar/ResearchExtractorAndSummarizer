@@ -86,7 +86,7 @@ def create_clusters(df_with_embeddings):
     if not all(col in df_with_embeddings.columns for col in ['Umap_1', 'Umap_2', 'Umap_3']):
         raise ValueError("The DataFrame must contain the columns 'Umap_1', 'Umap_2', and 'Umap_3' to perform clustering.")
 
-    hdbscan_model = HDBSCAN(min_cluster_size=5, metric='euclidean', cluster_selection_method='eom')
+    hdbscan_model = HDBSCAN(min_cluster_size=5,max_cluster_size=50, metric='euclidean', cluster_selection_method='eom')
     
     # Fit the HDBSCAN model on the specified UMAP embedding columns and generate cluster labels
     labels = hdbscan_model.fit_predict(df_with_embeddings[['Umap_1', 'Umap_2', 'Umap_3']])
@@ -153,8 +153,8 @@ def clusters_with_summary(df_with_embeddings, data_type='abstract'):
         # Generate a summary and title for the current cluster
         cluster_summary_with_title = summarize_text(text)
 
-        # Debugging: Log the raw output
-        print(f"Raw Output for Cluster {cluster_label}:\n{cluster_summary_with_title}")
+        # # Debugging: Log the raw output
+        # print(f"Raw Output for Cluster {cluster_label}:\n{cluster_summary_with_title}")
 
         # Enhanced cleaning to remove artifacts
         if isinstance(cluster_summary_with_title, str):
@@ -162,14 +162,14 @@ def clusters_with_summary(df_with_embeddings, data_type='abstract'):
             cluster_summary_with_title = cluster_summary_with_title.lstrip('```json').rstrip('```')  # Remove backticks and json marker
             cluster_summary_with_title = cluster_summary_with_title.strip()  # Strip again after cleaning
 
-        # Debugging: Log the cleaned output
-        print(f"Cleaned Output for Cluster {cluster_label}:\n{cluster_summary_with_title}")
+        # # Debugging: Log the cleaned output
+        # print(f"Cleaned Output for Cluster {cluster_label}:\n{cluster_summary_with_title}")
 
         # Parse the cleaned JSON string
         try:
             cluster_summary_with_title = json.loads(cluster_summary_with_title)
         except json.JSONDecodeError as e:
-            print(f"Error processing cluster {cluster_label}: {e}")
+            # print(f"Error processing cluster {cluster_label}: {e}")
             continue
 
         summaries.append(cluster_summary_with_title)
@@ -185,12 +185,151 @@ def clusters_with_summary(df_with_embeddings, data_type='abstract'):
 def visualize(df_with_embeddings, centroids_df):
 
     if 'Summary' not in centroids_df.columns and 'Title' not in centroids_df.columns:
-        raise ValueError("centroids_df DataFrame must contain both 'Summary' and 'Title' columns to proceed. Ensure that the clustering process includes generated summaries and titles.")
+        raise ValueError("centroids_df needs to be a DataFrame must contain both 'Summary' and 'Title' columns to proceed. Ensure that the clustering process includes generated summaries and titles.")
     
     if not all(col in df_with_embeddings.columns for col in ['Umap_1', 'Umap_2', 'Umap_3']):
-        raise ValueError("df_with_embeddings DataFrame must contain the columns 'Umap_1', 'Umap_2', and 'Umap_3' to perform clustering.")
+        raise ValueError("df_with_embeddings needs to be a DataFrame must contain the columns 'Umap_1', 'Umap_2', and 'Umap_3' to perform clustering.")
 
     centroids_df['Size'] = (centroids_df['Count'] ** 0.5) / (centroids_df['Count'].max() ** 0.5) * 100
 
-    
+        # Create the base 3D scatter plot
+    fig = go.Figure()
+
+    # Add points from the dataset with default opacity
+    fig.add_trace(go.Scatter3d(
+        x=df_with_embeddings['Umap_1'],
+        y=df_with_embeddings['Umap_2'],
+        z=df_with_embeddings['Umap_3'],
+        mode='markers',
+        marker=dict(
+            size=5,
+            color=df_with_embeddings['Cluster'],  # Cluster-based coloring
+            colorscale='Viridis',  # Color scale for clusters
+            opacity=0.8,  # Default opacity for documents
+
+        ),
+        name='Document Points (Opacity 0.8)',
+        visible=False,  # Default visibility
+        hovertext=(
+            "<b>Title:</b> " + df_with_embeddings['title'] 
+            # + "<br><b>Abstract:</b> " + df_with_embeddings['abstract']
+            ),
+        hoverinfo="text"
+    ))
+
+    # Add cluster centroids with size scaled by density
+    fig.add_trace(go.Scatter3d(
+        x=centroids_df['Umap_1'],
+        y=centroids_df['Umap_2'],
+        z=centroids_df['Umap_3'],
+        mode='markers',
+        marker=dict(
+            size=centroids_df['Size'],  # Use scaled size for centroids
+            color=centroids_df['Count'],  # Use the number of documents as the color value
+            colorscale='Picnic',  # Sequential scale for density
+            symbol='circle',
+            colorbar=dict(
+                title="Document Density",
+                thickness=10,
+                len=0.5,
+                
+            ),
+            opacity=.5  # Default opacity for clusters
+        ),
+        name='Cluster Centroids (Density-Based Coloring)',
+        hovertext=(
+            "<b>Topic:</b> " + centroids_df['Title'] 
+            # + "<br><b>Summary:</b> " + 
+            # centroids['Summary']
+            ),
+        hoverinfo="text", 
+        visible=True  # Default visibility
+    ))
+
+    # Add cluster centroids with lower opacity for alternative views
+    fig.add_trace(go.Scatter3d(
+        x=centroids_df['Umap_1'],
+        y=centroids_df['Umap_2'],
+        z=centroids_df['Umap_3'],
+        mode='markers',
+        marker=dict(
+            size=centroids_df['Size'],  # Use scaled size for centroids
+            color=centroids_df['Count'],  # Use the number of documents as the color value
+            colorscale='Picnic',  # Sequential scale for density
+            symbol='circle',
+            colorbar=dict(
+                title="Document Density",
+                thickness=10,
+                len=0.5,
+            
+            ),
+            opacity=0.3  # Lower opacity for this layer
+        ),
+        name='Cluster Centroids (Density-Based Coloring)',
+        visible=False, # Default visibility
+        hoverinfo="none" 
+    ))
+
+    # Add buttons to toggle visibility
+    fig.update_layout(
+        updatemenus=[
+            dict(
+                buttons=[
+                    dict(
+                        label="Show Only Clusters",
+                        method="update",
+                        args=[
+                            {"visible": [False, True, False]},  # Hide: Documents, Show: Default Centroids
+                            {"title": "3D Scatterplot of Only Topic Clusters"}
+                        ]
+                    ),
+                    dict(
+                        label="Show Documents and Clusters (Opacity 0.3)",
+                        method="update",
+                        args=[
+                            {"visible": [True, False, True]},  # Show: Documents, Low Opacity Centroids
+                            {"title": "3D Scatterplot of Documents with Topic Clusters "}
+                        ]
+                    ),
+                    dict(
+                        label="Show Only Documents",
+                        method="update",
+                        args=[
+                            {"visible": [True, False, False]},  # Show: Documents, Hide: Centroids
+                            {"title": "3D Scatterplot of Only Documents"}
+                        ]
+                    ),
+                    
+                ],
+                direction="down",
+                pad={"r": 10, "t": 10},
+                showactive=True,
+                x=1,
+                xanchor="left",
+                y=1,
+                yanchor="top"
+            )
+        ]
+    )
+
+    # Customize the layout to remove labels, grid, and background
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(title='', showgrid=False, showticklabels=False, backgroundcolor='white', showline=False),
+            yaxis=dict(title='', showgrid=False, showticklabels=False, backgroundcolor='white', showline=False),
+            zaxis=dict(title='', showgrid=False, showticklabels=False, backgroundcolor='white', showline=False)
+        ),
+        paper_bgcolor='white',  # Set figure background to white
+        width=1500,  # Set figure width
+        height=1200,  # Set figure height
+        title="3D Scatterplot of UMAP Embeddings"
+    )
+
+    # Show the plot
+    return fig.show()
+
+
+
+
+        
 
