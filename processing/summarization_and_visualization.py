@@ -79,13 +79,13 @@ def create_clusters(df_with_embeddings):
     
     """
 
-    if not all(col in df_with_embeddings.columns for col in ['Umap_1', 'Umap_2', 'Umap_3']):
-        raise ValueError("The DataFrame must contain the columns 'Umap_1', 'Umap_2', and 'Umap_3' to perform clustering.")
+    if not all(col in df_with_embeddings.columns for col in ['Umap_1', 'Umap_2']):
+        raise ValueError("The DataFrame must contain the columns 'Umap_1' and 'Umap_2' to perform clustering.")
 
     hdbscan_model = HDBSCAN(min_cluster_size=5,max_cluster_size=50, metric='euclidean', cluster_selection_method='eom')
     
     # Fit the HDBSCAN model on the specified UMAP embedding columns and generate cluster labels
-    labels = hdbscan_model.fit_predict(df_with_embeddings[['Umap_1', 'Umap_2', 'Umap_3']])
+    labels = hdbscan_model.fit_predict(df_with_embeddings[['Umap_1', 'Umap_2']])
 
     # Return the cluster labels, where -1 indicates points classified as noise
     return labels
@@ -124,7 +124,7 @@ def clusters_with_summary(df_with_embeddings, data_type='abstract'):
     df_with_embeddings = df_with_embeddings[df_with_embeddings['Cluster'] != -1]
 
     # Step 2: Calculate centroids for each cluster
-    centroids = df_with_embeddings.groupby('Cluster')[['Umap_1', 'Umap_2', 'Umap_3']].mean().reset_index()
+    centroids = df_with_embeddings.groupby('Cluster')[['Umap_1', 'Umap_2']].mean().reset_index()
 
     # Calculate cluster counts (number of points in each cluster)
     cluster_counts = df_with_embeddings['Cluster'].value_counts().reset_index()
@@ -187,102 +187,62 @@ def visualize(df_with_embeddings, centroids_df):
 
     Args:
         df_with_embeddings (pd.DataFrame): A DataFrame containing UMAP embeddings for individual research documents
-                                           with columns ['Umap_1', 'Umap_2', 'Umap_3'], and cluster labels.
+                                           with columns ['Umap_1', 'Umap_2'], and cluster labels.
         centroids_df (pd.DataFrame): A DataFrame containing the cluster centroids with additional metadata, 
-                                     including the required columns ['Umap_1', 'Umap_2', 'Umap_3', 'Count', 'Title', 'Summary'].
+                                     including the required columns ['Umap_1', 'Umap_2', 'Count', 'Title', 'Summary'].
 
     Returns:
         None: Displays an interactive 3D scatter plot in the browser or notebook.
-
-    Raises:
-        ValueError: If `centroids_df` does not contain the required columns ['Summary', 'Title'].
-        ValueError: If `df_with_embeddings` does not contain the required columns ['Umap_1', 'Umap_2', 'Umap_3'].
     """
 
     if 'Summary' not in centroids_df.columns and 'Title' not in centroids_df.columns:
-        raise ValueError("centroids_df needs to be a DataFrame must contain both 'Summary' and 'Title' columns to proceed. Ensure that the clustering process includes generated summaries and titles.")
+        raise ValueError("centroids_df needs to be a DataFrame that contains both 'Summary' and 'Title' columns to proceed.")
     
-    if not all(col in df_with_embeddings.columns for col in ['Umap_1', 'Umap_2', 'Umap_3']):
-        raise ValueError("df_with_embeddings needs to be a DataFrame must contain the columns 'Umap_1', 'Umap_2', and 'Umap_3' to perform clustering.")
+    if not all(col in df_with_embeddings.columns for col in ['Umap_1', 'Umap_2']):
+        raise ValueError("df_with_embeddings needs to be a DataFrame that contains the columns 'Umap_1' and 'Umap_2'.")
 
     centroids_df['Size'] = (centroids_df['Count'] ** 0.5) / (centroids_df['Count'].max() ** 0.5) * 50
 
-        # Create the base 3D scatter plot
+    # Create the base scatter plot
     fig = go.Figure()
 
-    # Add points from the dataset with default opacity
-    fig.add_trace(go.Scatter3d(
+    # Add points from the dataset
+    fig.add_trace(go.Scatter(
         x=df_with_embeddings['Umap_1'],
         y=df_with_embeddings['Umap_2'],
-        z=df_with_embeddings['Umap_3'],
         mode='markers',
         marker=dict(
             size=5,
             color=df_with_embeddings['Cluster'],  # Cluster-based coloring
-            colorscale='Viridis',  # Color scale for clusters
-            opacity=0.8,  # Default opacity for documents
-
+            colorscale='Viridis',
+            opacity=0.8,
         ),
-        name='Document Points)',
-        visible=False,  # Default visibility
-        hovertext=(
-            "<b>Title:</b> " + df_with_embeddings['title'] 
-            # + "<br><b>Abstract:</b> " + df_with_embeddings['abstract']
-            ),
+        name='Document Points',
+        visible=False,
+        hovertext="<b>Title:</b> " + df_with_embeddings['title'],
         hoverinfo="text"
     ))
 
-    # Add cluster centroids with size scaled by density
-    fig.add_trace(go.Scatter3d(
+    # Add cluster centroids
+    fig.add_trace(go.Scatter(
         x=centroids_df['Umap_1'],
         y=centroids_df['Umap_2'],
-        z=centroids_df['Umap_3'],
         mode='markers',
         marker=dict(
-            size=centroids_df['Size'],  # Use scaled size for centroids
-            color=centroids_df['Count'],  # Use the number of documents as the color value
-            colorscale='Picnic',  # Sequential scale for density
-            symbol='circle',
+            size=centroids_df['Size'],
+            color=centroids_df['Count'],
+            colorscale='Picnic',
             colorbar=dict(
                 title="Density",
                 thickness=10,
                 len=0.5,
-                
             ),
-            opacity=.5  # Default opacity for clusters
+            opacity=0.5
         ),
-        name='Topic Clusters (Density-Based Size and Color)',
-        hovertext=(
-            "<b>Topic:</b> " + centroids_df['Title'] 
-            # + "<br><b>Summary:</b> " + 
-            # centroids['Summary']
-            ),
-        hoverinfo="text", 
-        visible=True  # Default visibility
-    ))
-
-    # Add cluster centroids with lower opacity for alternative views
-    fig.add_trace(go.Scatter3d(
-        x=centroids_df['Umap_1'],
-        y=centroids_df['Umap_2'],
-        z=centroids_df['Umap_3'],
-        mode='markers',
-        marker=dict(
-            size=centroids_df['Size'],  # Use scaled size for centroids
-            color=centroids_df['Count'],  # Use the number of documents as the color value
-            colorscale='Picnic',  # Sequential scale for density
-            symbol='circle',
-            colorbar=dict(
-                title="Density",
-                thickness=10,
-                len=0.5,
-            
-            ),
-            opacity=0.3  # Lower opacity for this layer
-        ),
-        name='Cluster Centroids (Density-Based Coloring)',
-        visible=False, # Default visibility
-        hoverinfo="none" 
+        name='Topic Clusters',
+        hovertext="<b>Topic:</b> " + centroids_df['Title'],
+        hoverinfo="text",
+        visible=True
     ))
 
     # Add buttons to toggle visibility
@@ -294,30 +254,28 @@ def visualize(df_with_embeddings, centroids_df):
                         label="Topic Clusters",
                         method="update",
                         args=[
-                            {"visible": [False, True, False]},  # Hide: Documents, Show: Default Centroids
-                            {"title": "Scatterplot of Labeled Topic Clusters"}
+                            {"visible": [False, True]},
+                            {"title": "Scatterplot of Topic Clusters"}
                         ]
                     ),
                     dict(
-                        label="Research Titles and Topic Clusters",
+                        label="Research Titles and Clusters",
                         method="update",
                         args=[
-                            {"visible": [True, False, True]},  # Show: Documents, Low Opacity Centroids
-                            {"title": "Scatterplot of Labeled Research Titles and Topic Clusters"}
+                            {"visible": [True, True]},
+                            {"title": "Scatterplot of Research Titles and Topic Clusters"}
                         ]
                     ),
                     dict(
                         label="Research Titles",
                         method="update",
                         args=[
-                            {"visible": [True, False, False]},  # Show: Documents, Hide: Centroids
-                            {"title": "Scatterplot of Labeled Research Titles"}
+                            {"visible": [True, False]},
+                            {"title": "Scatterplot of Research Titles"}
                         ]
                     ),
-                    
                 ],
                 direction="down",
-                pad={"r": 10, "t": 10},
                 showactive=True,
                 x=1,
                 xanchor="left",
@@ -328,44 +286,26 @@ def visualize(df_with_embeddings, centroids_df):
     )
 
     fig.update_layout(
-        scene=dict(
-            xaxis=dict(
-                title='',
-                showgrid=True,
-                gridcolor='lightgray',
-                gridwidth=2,
-                showticklabels=False,
-                dtick=2,
-                backgroundcolor='white'
-            ),
-            yaxis=dict(
-                title='',
-                showgrid=False,
-                gridcolor='lightgray',
-                gridwidth=2,
-                showticklabels=False,
-                backgroundcolor='white'
-            ),
-            zaxis=dict(
-                title='',
-                showgrid=False,
-                gridcolor='lightgray',
-                gridwidth=2,
-                showticklabels=False,
-                backgroundcolor='white'
-            ),
+        xaxis=dict(
+            showgrid=True,
+            gridcolor='lightgray',
+            gridwidth=1,
+            dtick = 3,
+            showticklabels=True
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor='lightgray',
+            gridwidth=1,
+            dtick = 2,
+            showticklabels=True
         ),
         paper_bgcolor='white',
-        width=1150,
+        plot_bgcolor='white',
+        width=1100,
         height=850,
         title="Scatterplot of Labeled Topic Clusters"
     )
 
     # Show the plot
     return fig.show()
-
-
-
-
-        
-

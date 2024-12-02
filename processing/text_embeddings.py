@@ -50,9 +50,9 @@ def umap_transformation(pca_embeddings):
     
     """
     # Perform UMAP transformation
-    embedding_3d = UMAP(random_state=211, n_components=3).fit_transform(pca_embeddings)
-    embedding_df_3d = pd.DataFrame(embedding_3d, columns=['Umap_1', 'Umap_2', 'Umap_3'])
-    return embedding_df_3d
+    embedding_2d = UMAP(random_state=211).fit_transform(pca_embeddings)
+    embedding_df_2d = pd.DataFrame(embedding_2d, columns=['Umap_1', 'Umap_2'])
+    return embedding_df_2d
 
 
 
@@ -86,10 +86,10 @@ def reduced_embeddings(data_frame, data_type):
     # Generate embeddings and reduce dimensions
     embeddings = get_embeddings(text)
     pca_reduced_embeddings = optimal_pca_components(embeddings)
-    embedding_df_3d = umap_transformation(pca_reduced_embeddings)
+    embedding_df_2d = umap_transformation(pca_reduced_embeddings)
 
     # Concatenate the original data with reduced embeddings
-    df = pd.concat([data_frame.reset_index(drop=True), embedding_df_3d.reset_index(drop=True)], axis=1)
+    df = pd.concat([data_frame.reset_index(drop=True), embedding_df_2d.reset_index(drop=True)], axis=1)
 
     return df
 
